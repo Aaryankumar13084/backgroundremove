@@ -2,15 +2,23 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Settings, settingsSchema, BackgroundRemovalModel } from '@shared/schema';
+import { 
+  Settings, 
+  settingsSchema, 
+  BackgroundRemovalModel,
+  BackgroundType,
+  backgroundTypes
+} from '@shared/schema';
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel } from '@/components/ui/form';
 import { Switch } from '@/components/ui/switch';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Slider } from '@/components/ui/slider';
+import { Input } from '@/components/ui/input';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
-import { ChevronDown, Settings2 } from 'lucide-react';
+import { ChevronDown, Settings2, Upload, Image, Palette } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
 
 interface SettingsSectionProps {
@@ -28,6 +36,11 @@ export default function SettingsSection({ settings, isLoading }: SettingsSection
     foregroundThreshold: 50,
     backgroundThreshold: 30,
     alphaMatting: false,
+    backgroundType: 'transparent',
+    backgroundColor: '#ffffff',
+    backgroundImage: '',
+    allowResize: true,
+    allowMove: true,
     ...settings,
   };
   

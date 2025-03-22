@@ -24,6 +24,11 @@ export const imageSettings = pgTable("image_settings", {
   alphaMatting: boolean("alpha_matting").notNull().default(false),
   foregroundThreshold: integer("foreground_threshold").notNull().default(50),
   backgroundThreshold: integer("background_threshold").notNull().default(50),
+  backgroundType: text("background_type").notNull().default("transparent"),
+  backgroundColor: text("background_color").notNull().default("#ffffff"),
+  backgroundImage: text("background_image"),
+  allowResize: boolean("allow_resize").notNull().default(true),
+  allowMove: boolean("allow_move").notNull().default(true),
 });
 
 export const insertImageSettingsSchema = createInsertSchema(imageSettings).omit({
@@ -37,12 +42,21 @@ export type ImageSettings = typeof imageSettings.$inferSelect;
 export const backgroundRemovalModels = ["u2net", "u2netp", "u2net_human_seg"] as const;
 export type BackgroundRemovalModel = typeof backgroundRemovalModels[number];
 
+// Define background types
+export const backgroundTypes = ["transparent", "color", "image"] as const;
+export type BackgroundType = typeof backgroundTypes[number];
+
 // Settings validation schema for the frontend
 export const settingsSchema = z.object({
   model: z.enum(backgroundRemovalModels),
   alphaMatting: z.boolean(),
   foregroundThreshold: z.number().min(0).max(100),
   backgroundThreshold: z.number().min(0).max(100),
+  backgroundType: z.enum(backgroundTypes).default("transparent"),
+  backgroundColor: z.string().default("#ffffff"),
+  backgroundImage: z.string().optional(),
+  allowResize: z.boolean().default(true),
+  allowMove: z.boolean().default(true),
 });
 
 // Ensure the validation schema for settings

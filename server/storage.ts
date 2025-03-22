@@ -35,6 +35,11 @@ export class MemStorage implements IStorage {
       alphaMatting: false,
       foregroundThreshold: 50,
       backgroundThreshold: 50,
+      backgroundType: "transparent",
+      backgroundColor: "#ffffff",
+      backgroundImage: "",
+      allowResize: true,
+      allowMove: true,
     };
   }
 
