@@ -55,7 +55,7 @@ export default function SettingsSection({ settings, isLoading }: SettingsSection
       await apiRequest({
         url: '/api/settings',
         method: 'POST',
-        body: JSON.stringify(data),
+        body: data,
         headers: {
           'Content-Type': 'application/json',
         },
