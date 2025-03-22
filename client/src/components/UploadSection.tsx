@@ -13,6 +13,7 @@ import { apiRequest } from '@/lib/queryClient';
 interface UploadSectionProps {
   settings?: Settings;
   isLoading: boolean;
+  onUploadSuccess: (data: UploadResponse) => void;
 }
 
 interface UploadResponse {
@@ -20,7 +21,7 @@ interface UploadResponse {
   processed: string;
 }
 
-export default function UploadSection({ settings, isLoading }: UploadSectionProps) {
+export default function UploadSection({ settings, isLoading, onUploadSuccess }: UploadSectionProps) {
   const [processing, setProcessing] = useState(false);
   const [processingProgress, setProcessingProgress] = useState(0);
   const { toast } = useToast();
@@ -117,11 +118,7 @@ export default function UploadSection({ settings, isLoading }: UploadSectionProp
     }
   });
   
-  // Callback to be implemented by parent component
-  const onUploadSuccess = (data: UploadResponse) => {
-    // To be implemented in Home.tsx for displaying the result
-    console.log('Upload success', data);
-  };
+  // The onUploadSuccess callback is now passed as a prop
   
   const handleUpload = async () => {
     if (file) {
