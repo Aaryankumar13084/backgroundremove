@@ -165,24 +165,15 @@ export default function ResultSection({
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <h2 className="text-2xl font-bold tracking-tight">Result</h2>
         
-        <div className="flex gap-2">
-          <Button 
-            variant="outline" 
-            onClick={onReset}
-            disabled={downloadMutation.isPending}
-          >
-            <Repeat className="mr-2 h-4 w-4" />
-            Try another image
-          </Button>
-          
-          <Button 
-            onClick={handleDownload} 
-            disabled={downloadMutation.isPending}
-          >
-            <ImageDown className="mr-2 h-4 w-4" />
-            Download
-          </Button>
-        </div>
+        <Button 
+          variant="outline" 
+          onClick={onReset}
+          disabled={downloadMutation.isPending}
+          className="w-full sm:w-auto"
+        >
+          <Repeat className="mr-2 h-4 w-4" />
+          Try another image
+        </Button>
       </div>
       
       <Tabs defaultValue="comparison" value={activeTab} onValueChange={setActiveTab} className="w-full">
@@ -193,13 +184,13 @@ export default function ResultSection({
         </TabsList>
         
         <TabsContent value="comparison" className="mt-4">
-          <div className="border rounded-lg overflow-hidden bg-gray-50 dark:bg-gray-900 aspect-video h-[500px]">
+          <div className="border rounded-lg overflow-hidden bg-gray-50 dark:bg-gray-900 aspect-video h-[300px] sm:h-[400px] md:h-[500px]">
             <ComparisonSlider beforeImage={originalImage} afterImage={processedImage} />
           </div>
         </TabsContent>
         
         <TabsContent value="original" className="mt-4">
-          <div className="border rounded-lg overflow-hidden bg-gray-50 dark:bg-gray-900 aspect-video h-[500px] flex items-center justify-center">
+          <div className="border rounded-lg overflow-hidden bg-gray-50 dark:bg-gray-900 aspect-video h-[300px] sm:h-[400px] md:h-[500px] flex items-center justify-center">
             <img 
               src={originalImage} 
               alt="Original" 
@@ -211,7 +202,7 @@ export default function ResultSection({
         <TabsContent value="processed" className="mt-4">
           <div 
             ref={containerRef}
-            className={`border rounded-lg overflow-hidden relative aspect-video h-[500px] flex items-center justify-center ${settings?.backgroundType === 'transparent' ? 'bg-checkerboard' : ''}`}
+            className={`border rounded-lg overflow-hidden relative aspect-video h-[300px] sm:h-[400px] md:h-[500px] flex items-center justify-center ${settings?.backgroundType === 'transparent' ? 'bg-checkerboard' : ''}`}
             style={{
               backgroundColor: settings?.backgroundType === 'color' ? settings.backgroundColor : undefined,
               backgroundImage: settings?.backgroundType === 'image' && settings.backgroundImage ? `url(${settings.backgroundImage})` : undefined,
@@ -238,9 +229,9 @@ export default function ResultSection({
             
             {/* Controls overlay */}
             {(settings?.allowMove || settings?.allowResize) && (
-              <div className="absolute bottom-4 right-4 flex flex-col gap-2">
+              <div className="absolute bottom-3 right-3 md:bottom-4 md:right-4 flex flex-col gap-2 z-10">
                 {settings?.allowResize && (
-                  <div className="bg-white/80 dark:bg-black/80 backdrop-blur-sm p-2 rounded-lg shadow-lg space-y-2">
+                  <div className="bg-white/90 dark:bg-gray-900/90 backdrop-blur-sm p-2 rounded-lg shadow-lg space-y-2 w-full sm:w-auto">
                     <div className="flex items-center justify-between gap-2">
                       <Button 
                         variant="outline" 
@@ -267,79 +258,114 @@ export default function ResultSection({
                       </Button>
                     </div>
                     
-                    <div className="px-2">
+                    <div className="px-1 sm:px-2">
                       <Slider
                         value={[scale * 100]}
                         min={50}
                         max={300}
                         step={5}
                         onValueChange={([newValue]) => setScale(newValue / 100)}
+                        className="w-full"
                       />
                     </div>
                   </div>
                 )}
                 
-                <Button 
-                  variant="secondary" 
-                  size="sm" 
-                  onClick={resetTransform}
-                  className="shadow-lg"
-                >
-                  <Undo className="h-4 w-4 mr-2" />
-                  Reset
-                </Button>
+                <div className="flex gap-2 w-full sm:w-auto">
+                  {settings?.allowMove && (
+                    <Button 
+                      variant="secondary" 
+                      size="sm" 
+                      className="shadow-lg flex-1 sm:flex-initial"
+                    >
+                      <MoveHorizontal className="h-4 w-4 mr-2" />
+                      <span className="hidden sm:inline">Drag to move</span>
+                      <span className="sm:hidden">Move</span>
+                    </Button>
+                  )}
+                  
+                  <Button 
+                    variant="secondary" 
+                    size="sm" 
+                    onClick={resetTransform}
+                    className="shadow-lg flex-1 sm:flex-initial"
+                  >
+                    <Undo className="h-4 w-4 mr-2" />
+                    <span className="hidden sm:inline">Reset</span>
+                    <span className="sm:hidden">Reset</span>
+                  </Button>
+                </div>
               </div>
             )}
           </div>
         </TabsContent>
       </Tabs>
       
-      <div className="flex flex-col sm:flex-row gap-6">
-        <div className="flex-1 space-y-2">
-          <h3 className="font-medium">Format</h3>
-          <div className="flex flex-wrap gap-2">
-            <Button 
-              variant={format === 'png' ? 'default' : 'outline'} 
-              size="sm"
-              onClick={() => setFormat('png')}
-            >
-              PNG
-            </Button>
-            <Button 
-              variant={format === 'jpg' ? 'default' : 'outline'} 
-              size="sm"
-              onClick={() => setFormat('jpg')}
-            >
-              JPG
-            </Button>
+      <div className="border rounded-lg p-4 bg-background/50 backdrop-blur-sm">
+        <h3 className="font-medium mb-4">Download Options</h3>
+        <div className="flex flex-col sm:flex-row gap-6">
+          <div className="flex-1 space-y-2">
+            <h4 className="text-sm font-medium text-muted-foreground">Format</h4>
+            <div className="flex flex-wrap gap-2">
+              <Button 
+                variant={format === 'png' ? 'default' : 'outline'} 
+                size="sm"
+                onClick={() => setFormat('png')}
+                className="flex-1 sm:flex-none"
+              >
+                PNG
+              </Button>
+              <Button 
+                variant={format === 'jpg' ? 'default' : 'outline'} 
+                size="sm"
+                onClick={() => setFormat('jpg')}
+                className="flex-1 sm:flex-none"
+              >
+                JPG
+              </Button>
+            </div>
+          </div>
+          
+          <div className="flex-1 space-y-2">
+            <h4 className="text-sm font-medium text-muted-foreground">Quality</h4>
+            <div className="flex flex-wrap gap-2">
+              <Button 
+                variant={quality === 'high' ? 'default' : 'outline'} 
+                size="sm"
+                onClick={() => setQuality('high')}
+                className="flex-1 sm:flex-none"
+              >
+                High
+              </Button>
+              <Button 
+                variant={quality === 'medium' ? 'default' : 'outline'} 
+                size="sm"
+                onClick={() => setQuality('medium')}
+                className="flex-1 sm:flex-none"
+              >
+                Medium
+              </Button>
+              <Button 
+                variant={quality === 'low' ? 'default' : 'outline'} 
+                size="sm"
+                onClick={() => setQuality('low')}
+                className="flex-1 sm:flex-none"
+              >
+                Low
+              </Button>
+            </div>
           </div>
         </div>
         
-        <div className="flex-1 space-y-2">
-          <h3 className="font-medium">Quality</h3>
-          <div className="flex flex-wrap gap-2">
-            <Button 
-              variant={quality === 'high' ? 'default' : 'outline'} 
-              size="sm"
-              onClick={() => setQuality('high')}
-            >
-              High
-            </Button>
-            <Button 
-              variant={quality === 'medium' ? 'default' : 'outline'} 
-              size="sm"
-              onClick={() => setQuality('medium')}
-            >
-              Medium
-            </Button>
-            <Button 
-              variant={quality === 'low' ? 'default' : 'outline'} 
-              size="sm"
-              onClick={() => setQuality('low')}
-            >
-              Low
-            </Button>
-          </div>
+        <div className="mt-4 pt-4 border-t">
+          <Button 
+            onClick={handleDownload} 
+            disabled={downloadMutation.isPending}
+            className="w-full sm:w-auto"
+          >
+            <ImageDown className="mr-2 h-4 w-4" />
+            {downloadMutation.isPending ? 'Downloading...' : 'Download Image'}
+          </Button>
         </div>
       </div>
     </div>
