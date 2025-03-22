@@ -1,11 +1,14 @@
-import { useState } from "react";
-import { useDropzone } from "react-dropzone";
-import { useMutation } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
-import ResultSection from "./ResultSection";
-import { Settings } from "@shared/schema";
-import { Progress } from "@/components/ui/progress";
+import { useState } from 'react';
+import { useDropzone } from 'react-dropzone';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { Upload, Image as ImageIcon } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Progress } from '@/components/ui/progress';
+import { useToast } from '@/hooks/use-toast';
+import { Settings } from '@shared/schema';
+import { removeBackground } from '@/lib/backgroundRemover';
+import { useImageUpload } from '@/hooks/useImageUpload';
+import { apiRequest } from '@/lib/queryClient';
 
 interface UploadSectionProps {
   settings?: Settings;
@@ -18,148 +21,197 @@ interface UploadResponse {
 }
 
 export default function UploadSection({ settings, isLoading }: UploadSectionProps) {
-  const [isUploading, setIsUploading] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [imageUrls, setImageUrls] = useState<UploadResponse | null>(null);
+  const [processing, setProcessing] = useState(false);
+  const [processingProgress, setProcessingProgress] = useState(0);
   const { toast } = useToast();
-
+  const queryClient = useQueryClient();
+  
+  const {
+    file,
+    preview,
+    isLoading: isUploading,
+    error,
+    progress,
+    upload,
+    reset
+  } = useImageUpload({
+    maxSize: 10 * 1024 * 1024, // 10MB
+    allowedTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/jpg']
+  });
+  
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop: async (acceptedFiles) => {
+      if (acceptedFiles.length > 0) {
+        await upload(acceptedFiles[0]);
+      }
+    },
+    maxSize: 10 * 1024 * 1024,
+    accept: {
+      'image/jpeg': [],
+      'image/png': [],
+      'image/webp': [],
+      'image/jpg': []
+    },
+    multiple: false
+  });
+  
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => {
+      if (!file) throw new Error('No file selected');
+      
       const formData = new FormData();
-      formData.append("image", file);
+      formData.append('image', file);
       
-      // Simulate progress updates
-      const progressInterval = setInterval(() => {
-        setProgress((prev) => {
-          const newProgress = prev + Math.random() * 10;
-          return newProgress > 90 ? 90 : newProgress;
-        });
-      }, 200);
+      setProcessing(true);
+      setProcessingProgress(10);
       
-      try {
-        const response = await fetch("/api/upload", {
-          method: "POST",
-          body: formData,
-          credentials: "include",
-        });
-        
-        if (!response.ok) {
-          throw new Error(`Upload failed: ${response.statusText}`);
+      // Client-side processing using TensorFlow
+      if (preview) {
+        try {
+          setProcessingProgress(30);
+          // Process the image using TensorFlow.js
+          const processedImageUrl = await removeBackground(preview, {
+            foregroundThreshold: settings?.foregroundThreshold,
+            backgroundThreshold: settings?.backgroundThreshold,
+            alphaMatting: settings?.alphaMatting
+          });
+          
+          setProcessingProgress(80);
+          
+          // Return both the original and processed image
+          return {
+            original: preview,
+            processed: processedImageUrl
+          };
+        } catch (error) {
+          console.error('Error processing image:', error);
+          throw error;
+        } finally {
+          setProcessingProgress(100);
+          setProcessing(false);
         }
-        
-        return await response.json() as UploadResponse;
-      } finally {
-        clearInterval(progressInterval);
-        setProgress(100);
       }
+      
+      // As a fallback, use server-side processing
+      const response = await apiRequest({
+        url: '/api/upload',
+        method: 'POST',
+        body: formData,
+        withCredentials: true
+      });
+      
+      return response as UploadResponse;
     },
     onSuccess: (data) => {
-      setImageUrls(data);
-      setIsUploading(false);
-      toast({
-        title: "Success",
-        description: "Image background has been successfully removed.",
-      });
+      queryClient.invalidateQueries({ queryKey: ['/api/images'] });
+      onUploadSuccess(data);
     },
     onError: (error) => {
-      setIsUploading(false);
       toast({
-        title: "Upload Failed",
-        description: error instanceof Error ? error.message : "Failed to process image",
-        variant: "destructive",
+        title: 'Upload failed',
+        description: error instanceof Error ? error.message : 'Failed to upload image',
+        variant: 'destructive'
       });
+      setProcessing(false);
     }
   });
-
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    accept: {
-      'image/jpeg': ['.jpg', '.jpeg'],
-      'image/png': ['.png']
-    },
-    maxSize: 5 * 1024 * 1024, // 5MB
-    onDrop: (acceptedFiles, rejectedFiles) => {
-      if (rejectedFiles.length > 0) {
-        const error = rejectedFiles[0].errors[0];
-        let errorMessage = "Invalid file";
-        
-        if (error.code === "file-too-large") {
-          errorMessage = "File is too large. Maximum size is 5MB.";
-        } else if (error.code === "file-invalid-type") {
-          errorMessage = "Invalid file type. Only JPG and PNG are supported.";
-        }
-        
-        toast({
-          title: "Upload Failed",
-          description: errorMessage,
-          variant: "destructive",
-        });
-        return;
-      }
-      
-      if (acceptedFiles.length > 0) {
-        setIsUploading(true);
-        setProgress(0);
-        uploadMutation.mutate(acceptedFiles[0]);
-      }
-    },
-    disabled: isUploading || isLoading
-  });
-
-  const resetUpload = () => {
-    setImageUrls(null);
-    setIsUploading(false);
-    setProgress(0);
+  
+  // Callback to be implemented by parent component
+  const onUploadSuccess = (data: UploadResponse) => {
+    // To be implemented in Home.tsx for displaying the result
+    console.log('Upload success', data);
   };
-
+  
+  const handleUpload = async () => {
+    if (file) {
+      uploadMutation.mutate(file);
+    } else {
+      toast({
+        title: 'No image selected',
+        description: 'Please select an image to upload',
+        variant: 'destructive'
+      });
+    }
+  };
+  
   return (
-    <div className="p-6">
-      {/* Drop Zone (shown when no image is uploaded) */}
-      {!isUploading && !imageUrls && (
-        <div
-          {...getRootProps()}
-          className={`drop-zone border-2 border-dashed border-gray-300 rounded-lg p-12 text-center cursor-pointer hover:bg-gray-50 transition-colors ${
-            isDragActive ? "border-primary bg-blue-50" : ""
-          }`}
+    <div className="w-full max-w-4xl mx-auto p-4">
+      <div 
+        {...getRootProps()}
+        className={`border-2 border-dashed rounded-lg p-6 cursor-pointer transition-colors duration-200 
+          ${isDragActive ? 'border-primary bg-primary/5' : 'border-gray-300 dark:border-gray-700'} 
+          ${preview ? 'bg-gray-50 dark:bg-gray-900/50' : 'bg-white dark:bg-gray-950'}`}
+      >
+        <input {...getInputProps()} />
+        
+        {preview ? (
+          <div className="flex flex-col items-center">
+            <div className="relative w-full max-w-xl mx-auto">
+              <img 
+                src={preview} 
+                alt="Preview" 
+                className="w-full h-auto max-h-[400px] object-contain rounded-md shadow-sm" 
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                className="absolute top-2 right-2 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  reset();
+                }}
+              >
+                Change
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center space-y-4 text-center py-8">
+            <div className="rounded-full bg-primary/10 p-4">
+              <Upload className="h-8 w-8 text-primary" />
+            </div>
+            <div className="space-y-2">
+              <h3 className="font-medium text-lg">Upload an image</h3>
+              <p className="text-gray-500 dark:text-gray-400 text-sm max-w-sm">
+                Drag and drop or click to upload. We support JPG, PNG and WebP images up to 10 MB.
+              </p>
+            </div>
+          </div>
+        )}
+        
+        {error && (
+          <div className="text-red-500 text-sm mt-2 text-center">{error}</div>
+        )}
+        
+        {isUploading && (
+          <div className="mt-4 w-full max-w-xs mx-auto">
+            <Progress value={progress} className="h-2" />
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 text-center">Uploading... {progress}%</p>
+          </div>
+        )}
+      </div>
+      
+      <div className="mt-6 flex justify-center">
+        <Button
+          onClick={handleUpload}
+          disabled={!file || isUploading || uploadMutation.isPending || isLoading}
+          className="w-full max-w-xs"
         >
-          <input {...getInputProps()} />
-          <div className="space-y-4">
-            <div className="mx-auto w-16 h-16 flex items-center justify-center rounded-full bg-blue-50 text-primary">
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="17 8 12 3 7 8" />
-                <line x1="12" y1="3" x2="12" y2="15" />
-              </svg>
-            </div>
-            <div>
-              <p className="text-lg font-medium text-gray-900">
-                Drop your image here, or <span className="text-primary">browse</span>
-              </p>
-              <p className="text-sm text-gray-500 mt-1">
-                Supports JPG, PNG • Max file size: 5MB
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Processing State (shown when image is uploading) */}
-      {isUploading && (
-        <div className="mt-8">
-          <div className="flex flex-col items-center space-y-4">
-            <Progress value={progress} className="w-full" />
-            <p className="text-sm text-gray-600">Removing background... Please wait</p>
-          </div>
-        </div>
-      )}
-
-      {/* Result Section (shown after background removal) */}
-      {imageUrls && (
-        <ResultSection 
-          originalImage={imageUrls.original} 
-          processedImage={imageUrls.processed} 
-          onReset={resetUpload} 
-        />
-      )}
+          {uploadMutation.isPending || processing ? (
+            <>
+              <span className="mr-2">
+                Processing...
+              </span>
+              {processingProgress}%
+            </>
+          ) : (
+            <>
+              <ImageIcon className="mr-2 h-4 w-4" />
+              Remove Background
+            </>
+          )}
+        </Button>
+      </div>
     </div>
   );
 }
