@@ -1,9 +1,10 @@
-import { useState } from 'react';
-import { ImageDown, Repeat } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { ImageDown, Repeat, ZoomIn, ZoomOut, MoveHorizontal, Undo } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useMutation } from '@tanstack/react-query';
-import { downloadOptionsSchema, type DownloadOptions, type ImageFormat, type ImageQuality } from '@shared/schema';
+import { Slider } from '@/components/ui/slider';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { downloadOptionsSchema, type DownloadOptions, type ImageFormat, type ImageQuality, type Settings } from '@shared/schema';
 import { useToast } from '@/hooks/use-toast';
 import ComparisonSlider from './ComparisonSlider';
 import { apiRequest } from '@/lib/queryClient';
@@ -20,10 +21,23 @@ export default function ResultSection({
   processedImage, 
   onReset 
 }: ResultSectionProps) {
-  const [activeTab, setActiveTab] = useState('comparison');
+  const [activeTab, setActiveTab] = useState('processed');
   const [format, setFormat] = useState<ImageFormat>('png');
   const [quality, setQuality] = useState<ImageQuality>('high');
   const { toast } = useToast();
+  
+  // Image manipulation state
+  const [scale, setScale] = useState(1);
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const imageRef = useRef<HTMLImageElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  
+  // Fetch settings to check if move/resize is enabled
+  const { data: settings } = useQuery<Settings>({
+    queryKey: ["/api/settings"],
+  });
   
   const downloadMutation = useMutation({
     mutationFn: async (options: DownloadOptions) => {
@@ -50,6 +64,88 @@ export default function ResultSection({
       });
     }
   });
+  
+  // Reset image position and scale
+  const resetTransform = () => {
+    setScale(1);
+    setPosition({ x: 0, y: 0 });
+  };
+  
+  // Handle mouse down for dragging
+  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!settings?.allowMove) return;
+    
+    setIsDragging(true);
+    setDragStart({ x: e.clientX - position.x, y: e.clientY - position.y });
+  };
+  
+  // Handle mouse move for dragging
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isDragging || !settings?.allowMove) return;
+    
+    const newX = e.clientX - dragStart.x;
+    const newY = e.clientY - dragStart.y;
+    setPosition({ x: newX, y: newY });
+  };
+  
+  // Handle mouse up to stop dragging
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+  
+  // Handle zoom in
+  const handleZoomIn = () => {
+    if (!settings?.allowResize) return;
+    setScale(prev => Math.min(prev + 0.1, 3));
+  };
+  
+  // Handle zoom out
+  const handleZoomOut = () => {
+    if (!settings?.allowResize) return;
+    setScale(prev => Math.max(prev - 0.1, 0.5));
+  };
+  
+  // Handle touch events for mobile
+  useEffect(() => {
+    const handleTouchStart = (e: TouchEvent) => {
+      if (!settings?.allowMove || e.touches.length !== 1) return;
+      
+      const touch = e.touches[0];
+      setIsDragging(true);
+      setDragStart({ x: touch.clientX - position.x, y: touch.clientY - position.y });
+    };
+    
+    const handleTouchMove = (e: TouchEvent) => {
+      if (!isDragging || !settings?.allowMove || e.touches.length !== 1) return;
+      
+      const touch = e.touches[0];
+      const newX = touch.clientX - dragStart.x;
+      const newY = touch.clientY - dragStart.y;
+      setPosition({ x: newX, y: newY });
+      
+      // Prevent default to avoid page scrolling while dragging
+      e.preventDefault();
+    };
+    
+    const handleTouchEnd = () => {
+      setIsDragging(false);
+    };
+    
+    const container = containerRef.current;
+    if (container) {
+      container.addEventListener('touchstart', handleTouchStart);
+      container.addEventListener('touchmove', handleTouchMove, { passive: false });
+      container.addEventListener('touchend', handleTouchEnd);
+    }
+    
+    return () => {
+      if (container) {
+        container.removeEventListener('touchstart', handleTouchStart);
+        container.removeEventListener('touchmove', handleTouchMove);
+        container.removeEventListener('touchend', handleTouchEnd);
+      }
+    };
+  }, [isDragging, position, dragStart, settings?.allowMove]);
   
   const handleDownload = () => {
     try {
@@ -113,12 +209,87 @@ export default function ResultSection({
         </TabsContent>
         
         <TabsContent value="processed" className="mt-4">
-          <div className="border rounded-lg overflow-hidden bg-checkerboard aspect-video h-[500px] flex items-center justify-center">
+          <div 
+            ref={containerRef}
+            className={`border rounded-lg overflow-hidden relative aspect-video h-[500px] flex items-center justify-center ${settings?.backgroundType === 'transparent' ? 'bg-checkerboard' : ''}`}
+            style={{
+              backgroundColor: settings?.backgroundType === 'color' ? settings.backgroundColor : undefined,
+              backgroundImage: settings?.backgroundType === 'image' && settings.backgroundImage ? `url(${settings.backgroundImage})` : undefined,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              cursor: settings?.allowMove ? (isDragging ? 'grabbing' : 'grab') : 'default'
+            }}
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseUp}
+          >
             <img 
+              ref={imageRef}
               src={processedImage} 
               alt="Processed" 
-              className="max-w-full max-h-full object-contain" 
+              className="max-w-full max-h-full object-contain transition-transform"
+              style={{
+                transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`,
+                transformOrigin: 'center',
+                pointerEvents: 'none' // Prevents the image from capturing mouse events
+              }}
             />
+            
+            {/* Controls overlay */}
+            {(settings?.allowMove || settings?.allowResize) && (
+              <div className="absolute bottom-4 right-4 flex flex-col gap-2">
+                {settings?.allowResize && (
+                  <div className="bg-white/80 dark:bg-black/80 backdrop-blur-sm p-2 rounded-lg shadow-lg space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <Button 
+                        variant="outline" 
+                        size="icon" 
+                        onClick={handleZoomOut}
+                        disabled={scale <= 0.5}
+                        className="h-8 w-8"
+                      >
+                        <ZoomOut className="h-4 w-4" />
+                      </Button>
+                      
+                      <div className="text-xs font-medium">
+                        {Math.round(scale * 100)}%
+                      </div>
+                      
+                      <Button 
+                        variant="outline" 
+                        size="icon" 
+                        onClick={handleZoomIn}
+                        disabled={scale >= 3}
+                        className="h-8 w-8"
+                      >
+                        <ZoomIn className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    
+                    <div className="px-2">
+                      <Slider
+                        value={[scale * 100]}
+                        min={50}
+                        max={300}
+                        step={5}
+                        onValueChange={([newValue]) => setScale(newValue / 100)}
+                      />
+                    </div>
+                  </div>
+                )}
+                
+                <Button 
+                  variant="secondary" 
+                  size="sm" 
+                  onClick={resetTransform}
+                  className="shadow-lg"
+                >
+                  <Undo className="h-4 w-4 mr-2" />
+                  Reset
+                </Button>
+              </div>
+            )}
           </div>
         </TabsContent>
       </Tabs>
