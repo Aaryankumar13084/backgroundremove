@@ -93,14 +93,15 @@ export default function UploadSection({ settings, isLoading }: UploadSectionProp
       }
       
       // As a fallback, use server-side processing
-      const response = await apiRequest({
+      const response = await apiRequest<UploadResponse>({
         url: '/api/upload',
         method: 'POST',
         body: formData,
-        withCredentials: true
+        withCredentials: true,
+        on401: 'throw'
       });
       
-      return response as UploadResponse;
+      return response;
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['/api/images'] });

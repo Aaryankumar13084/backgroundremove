@@ -7,20 +7,55 @@ async function throwIfResNotOk(res: Response) {
   }
 }
 
-export async function apiRequest(
-  method: string,
-  url: string,
-  data?: unknown | undefined,
-): Promise<Response> {
-  const res = await fetch(url, {
-    method,
-    headers: data ? { "Content-Type": "application/json" } : {},
-    body: data ? JSON.stringify(data) : undefined,
-    credentials: "include",
-  });
+export interface ApiRequestOptions {
+  url: string;
+  method: string;
+  body?: any;
+  headers?: Record<string, string>;
+  withCredentials?: boolean;
+  on401?: "returnNull" | "throw";
+}
 
+export async function apiRequest<T = any>(options: ApiRequestOptions): Promise<T> {
+  const { url, method, body, headers = {}, withCredentials = true, on401 = "throw" } = options;
+  
+  const requestHeaders: Record<string, string> = { ...headers };
+  
+  // If no Content-Type is set and we have a body that's not FormData, default to JSON
+  if (!requestHeaders["Content-Type"] && body && !(body instanceof FormData)) {
+    requestHeaders["Content-Type"] = "application/json";
+  }
+  
+  const fetchOptions: RequestInit = {
+    method,
+    headers: requestHeaders,
+    credentials: withCredentials ? "include" : "same-origin"
+  };
+  
+  // Only add the body if it exists
+  if (body) {
+    // Don't stringify FormData objects
+    fetchOptions.body = body instanceof FormData ? body : 
+                        requestHeaders["Content-Type"] === "application/json" ? 
+                        JSON.stringify(body) : body;
+  }
+  
+  const res = await fetch(url, fetchOptions);
+  
+  // Handle unauthorized response based on parameter
+  if (res.status === 401 && on401 === "returnNull") {
+    return null as T;
+  }
+  
   await throwIfResNotOk(res);
-  return res;
+  
+  // Check if the response is empty
+  const contentType = res.headers.get("content-type");
+  if (contentType && contentType.includes("application/json")) {
+    return await res.json();
+  }
+  
+  return res as unknown as T;
 }
 
 type UnauthorizedBehavior = "returnNull" | "throw";

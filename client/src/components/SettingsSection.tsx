@@ -1,16 +1,17 @@
-import { useState } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
-import { Settings, settingsSchema, backgroundRemovalModels } from "@shared/schema";
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel } from "@/components/ui/form";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Switch } from "@/components/ui/switch";
-import { Slider } from "@/components/ui/slider";
-import { Button } from "@/components/ui/button";
-import { Loader2 } from "lucide-react";
+import { useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { Settings, settingsSchema, BackgroundRemovalModel } from '@shared/schema';
+import { Button } from '@/components/ui/button';
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel } from '@/components/ui/form';
+import { Switch } from '@/components/ui/switch';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Slider } from '@/components/ui/slider';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { useToast } from '@/hooks/use-toast';
+import { ChevronDown, Settings2 } from 'lucide-react';
+import { apiRequest } from '@/lib/queryClient';
 
 interface SettingsSectionProps {
   settings?: Settings;
@@ -18,201 +19,197 @@ interface SettingsSectionProps {
 }
 
 export default function SettingsSection({ settings, isLoading }: SettingsSectionProps) {
+  const [isOpen, setIsOpen] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
-  // Default settings if not yet loaded
   const defaultSettings: Settings = {
-    model: "u2net",
-    alphaMatting: false,
+    model: 'u2net',
     foregroundThreshold: 50,
-    backgroundThreshold: 50,
+    backgroundThreshold: 30,
+    alphaMatting: false,
+    ...settings,
   };
   
   const form = useForm<Settings>({
     resolver: zodResolver(settingsSchema),
-    defaultValues: settings || defaultSettings,
+    defaultValues: defaultSettings,
     values: settings,
   });
   
-  const updateSettingsMutation = useMutation({
+  const mutation = useMutation({
     mutationFn: async (data: Settings) => {
-      const response = await apiRequest("POST", "/api/settings", data);
-      return response.json();
+      await apiRequest({
+        url: '/api/settings',
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        on401: 'throw'
+      });
+      return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/settings"] });
+      queryClient.invalidateQueries({ queryKey: ['/api/settings'] });
       toast({
-        title: "Settings saved",
-        description: "Your settings have been updated successfully.",
+        title: 'Settings saved',
+        description: 'Your settings have been saved successfully.',
       });
     },
     onError: (error) => {
       toast({
-        title: "Settings failed to save",
-        description: error instanceof Error ? error.message : "An error occurred when saving settings",
-        variant: "destructive",
+        title: 'Error saving settings',
+        description: error instanceof Error ? error.message : 'An unknown error occurred',
+        variant: 'destructive',
       });
-    }
+    },
   });
   
   const onSubmit = (data: Settings) => {
-    updateSettingsMutation.mutate(data);
+    mutation.mutate(data);
   };
   
-  if (isLoading) {
-    return (
-      <div className="p-6 flex justify-center items-center min-h-[300px]">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
+  const modelOptions = [
+    { value: 'u2net', label: 'U2Net (Best Quality)' },
+    { value: 'u2netp', label: 'U2Net-P (Faster)' },
+    { value: 'u2net_human_seg', label: 'U2Net Human Seg (People Only)' },
+  ];
   
   return (
-    <div className="p-6">
-      <div className="max-w-3xl mx-auto">
-        <h2 className="text-lg font-medium text-gray-900 mb-4">Background Removal Settings</h2>
+    <div className="w-full max-w-4xl mx-auto">
+      <Collapsible open={isOpen} onOpenChange={setIsOpen} className="border rounded-lg shadow-sm">
+        <CollapsibleTrigger asChild>
+          <Button 
+            variant="ghost" 
+            className="flex w-full justify-between p-4 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-900"
+          >
+            <div className="flex items-center gap-2">
+              <Settings2 className="h-5 w-5 text-primary" />
+              <span className="font-medium">Advanced Settings</span>
+            </div>
+            <ChevronDown 
+              className={`h-5 w-5 transition-transform ${isOpen ? 'rotate-180 transform' : ''}`} 
+            />
+          </Button>
+        </CollapsibleTrigger>
         
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            {/* AI Model Selection */}
-            <div className="bg-white shadow sm:rounded-lg">
-              <div className="px-4 py-5 sm:p-6">
-                <h3 className="text-base font-medium text-gray-900">AI Model Selection</h3>
-                <FormField
-                  control={form.control}
-                  name="model"
-                  render={({ field }) => (
-                    <FormItem className="mt-4 space-y-3">
-                      <FormControl>
-                        <RadioGroup
-                          onValueChange={field.onChange}
-                          defaultValue={field.value}
-                          value={field.value}
-                          className="flex flex-col space-y-3"
-                        >
-                          <div className="flex items-center space-x-3">
-                            <RadioGroupItem value="u2net" id="model-u2net" />
-                            <FormLabel htmlFor="model-u2net" className="font-normal">
-                              U2Net (Default) - Best overall performance
+        <CollapsibleContent className="p-4 pt-0">
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+              <FormField
+                control={form.control}
+                name="model"
+                render={({ field }) => (
+                  <FormItem className="space-y-2">
+                    <FormLabel>Background Removal Model</FormLabel>
+                    <FormControl>
+                      <RadioGroup
+                        onValueChange={field.onChange}
+                        value={field.value}
+                        className="flex flex-col space-y-1"
+                      >
+                        {modelOptions.map((option) => (
+                          <FormItem 
+                            key={option.value} 
+                            className="flex items-center space-x-2 space-y-0"
+                          >
+                            <FormControl>
+                              <RadioGroupItem 
+                                value={option.value as BackgroundRemovalModel} 
+                                id={option.value}
+                              />
+                            </FormControl>
+                            <FormLabel className="font-normal cursor-pointer" htmlFor={option.value}>
+                              {option.label}
                             </FormLabel>
-                          </div>
-                          <div className="flex items-center space-x-3">
-                            <RadioGroupItem value="u2netp" id="model-u2netp" />
-                            <FormLabel htmlFor="model-u2netp" className="font-normal">
-                              U2Net-p - Faster but less accurate
-                            </FormLabel>
-                          </div>
-                          <div className="flex items-center space-x-3">
-                            <RadioGroupItem value="u2net_human_seg" id="model-u2net_human_seg" />
-                            <FormLabel htmlFor="model-u2net_human_seg" className="font-normal">
-                              U2Net Human Segmentation - Optimized for humans
-                            </FormLabel>
-                          </div>
-                        </RadioGroup>
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-              </div>
-            </div>
-            
-            {/* Processing Options */}
-            <div className="bg-white shadow sm:rounded-lg">
-              <div className="px-4 py-5 sm:p-6">
-                <h3 className="text-base font-medium text-gray-900">Processing Options</h3>
-                <div className="mt-4 space-y-4">
-                  {/* Alpha Matting */}
-                  <FormField
-                    control={form.control}
-                    name="alphaMatting"
-                    render={({ field }) => (
-                      <FormItem className="flex items-center justify-between">
-                        <div>
-                          <FormLabel className="font-medium">Alpha Matting</FormLabel>
-                          <FormDescription className="text-sm text-gray-500">
-                            Better edge detection for complex images (slower)
-                          </FormDescription>
-                        </div>
-                        <FormControl>
-                          <Switch 
-                            checked={field.value} 
-                            onCheckedChange={field.onChange}
-                          />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                  
-                  {/* Foreground Threshold */}
-                  <FormField
-                    control={form.control}
-                    name="foregroundThreshold"
-                    render={({ field }) => (
-                      <FormItem className="flex items-center justify-between">
-                        <div>
-                          <FormLabel className="font-medium">Foreground Threshold</FormLabel>
-                          <FormDescription className="text-sm text-gray-500">
-                            Sensitivity for foreground detection
-                          </FormDescription>
-                        </div>
-                        <FormControl className="w-32">
-                          <Slider
-                            min={0}
-                            max={100}
-                            step={1}
-                            value={[field.value]}
-                            onValueChange={(vals) => field.onChange(vals[0])}
-                          />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                  
-                  {/* Background Threshold */}
-                  <FormField
-                    control={form.control}
-                    name="backgroundThreshold"
-                    render={({ field }) => (
-                      <FormItem className="flex items-center justify-between">
-                        <div>
-                          <FormLabel className="font-medium">Background Threshold</FormLabel>
-                          <FormDescription className="text-sm text-gray-500">
-                            Sensitivity for background detection
-                          </FormDescription>
-                        </div>
-                        <FormControl className="w-32">
-                          <Slider
-                            min={0}
-                            max={100}
-                            step={1}
-                            value={[field.value]}
-                            onValueChange={(vals) => field.onChange(vals[0])}
-                          />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              </div>
-            </div>
-            
-            {/* Save Button */}
-            <div className="flex justify-end">
+                          </FormItem>
+                        ))}
+                      </RadioGroup>
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="foregroundThreshold"
+                render={({ field }) => (
+                  <FormItem className="space-y-2">
+                    <div className="flex justify-between">
+                      <FormLabel>Foreground Threshold: {field.value}%</FormLabel>
+                    </div>
+                    <FormControl>
+                      <Slider
+                        min={0}
+                        max={100}
+                        step={1}
+                        value={[field.value]}
+                        onValueChange={(values) => field.onChange(values[0])}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      Higher values keep only areas that are definitely foreground.
+                    </FormDescription>
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="backgroundThreshold"
+                render={({ field }) => (
+                  <FormItem className="space-y-2">
+                    <div className="flex justify-between">
+                      <FormLabel>Background Threshold: {field.value}%</FormLabel>
+                    </div>
+                    <FormControl>
+                      <Slider
+                        min={0}
+                        max={100}
+                        step={1}
+                        value={[field.value]}
+                        onValueChange={(values) => field.onChange(values[0])}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      Higher values remove more of the background.
+                    </FormDescription>
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="alphaMatting"
+                render={({ field }) => (
+                  <FormItem className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <FormLabel>Alpha Matting</FormLabel>
+                      <FormDescription>
+                        Improves edge details but increases processing time.
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              
               <Button 
                 type="submit" 
-                disabled={updateSettingsMutation.isPending}
-                className="inline-flex items-center px-4 py-2"
+                disabled={!form.formState.isDirty || mutation.isPending || isLoading}
               >
-                {updateSettingsMutation.isPending && (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                )}
-                Save Settings
+                {mutation.isPending ? 'Saving...' : 'Save Settings'}
               </Button>
-            </div>
-          </form>
-        </Form>
-      </div>
+            </form>
+          </Form>
+        </CollapsibleContent>
+      </Collapsible>
     </div>
   );
 }
