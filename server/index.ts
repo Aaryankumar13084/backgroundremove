@@ -58,7 +58,7 @@ app.use((req, res, next) => {
 
   // Use environment port or default to 5000
   // this serves both the API and the client.
-  const port = process.env.PORT || 5000;
+  const port = process.env.PORT || 8080;
   server.listen({
     port: Number(port),
     host: "0.0.0.0",
