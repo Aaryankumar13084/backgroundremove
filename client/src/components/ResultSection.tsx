@@ -42,8 +42,38 @@ export default function ResultSection({
   const downloadMutation = useMutation({
     mutationFn: async (options: DownloadOptions) => {
       try {
-        // Client-side download of processed image
-        downloadImage(processedImage, 'background_removed', options.format);
+        const canvas = document.createElement('canvas');
+        const img = new Image();
+        
+        img.onload = () => {
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext('2d');
+          
+          if (ctx) {
+            // Draw background first if not transparent
+            if (settings?.backgroundType === 'color') {
+              ctx.fillStyle = settings.backgroundColor;
+              ctx.fillRect(0, 0, canvas.width, canvas.height);
+            } else if (settings?.backgroundType === 'image' && settings.backgroundImage) {
+              const bgImg = new Image();
+              bgImg.src = settings.backgroundImage;
+              ctx.drawImage(bgImg, 0, 0, canvas.width, canvas.height);
+            }
+            
+            // Draw the processed image on top
+            ctx.drawImage(img, 0, 0);
+            
+            // Convert to desired format and download
+            const dataUrl = canvas.toDataURL(`image/${options.format}`);
+            const link = document.createElement('a');
+            link.download = `background_removed.${options.format}`;
+            link.href = dataUrl;
+            link.click();
+          }
+        };
+        
+        img.src = processedImage;
         return { success: true };
       } catch (error) {
         console.error('Error downloading image:', error);
