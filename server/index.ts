@@ -56,6 +56,11 @@ app.use((req, res, next) => {
     serveStatic(app);
   }
 
+// Sitemap Serve करने का Route (Root Directory से)
+app.get("/sitemap.xml", (req, res) => {
+    res.sendFile(path.join(__dirname, "sitemap.xml"));
+});
+
   // Use environment port or default to 5000
   // this serves both the API and the client.
   const port = process.env.PORT || 8080;
