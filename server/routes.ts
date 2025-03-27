@@ -57,6 +57,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 app.get('/sitemap.xml', (_req: Request, res: Response) => {
   res.sendFile(path.join(process.cwd(), 'sitemap.xml'));
 });
+app.get('/generated-icon.png', (_req: Request, res: Response) => {
+  res.sendFile(path.join(process.cwd(), 'generated-icon.png'));
+});
 
   // API routes
   app.get("/api/settings", async (_req: Request, res: Response) => {
