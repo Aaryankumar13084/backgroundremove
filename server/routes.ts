@@ -54,6 +54,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   await ensureDir(uploadsDir);
   await ensureDir(processedDir);
 
+app.get('/sitemap.xml', (_req: Request, res: Response) => {
+  res.sendFile(path.join(process.cwd(), 'sitemap.xml'));
+});
+
   // API routes
   app.get("/api/settings", async (_req: Request, res: Response) => {
     try {
