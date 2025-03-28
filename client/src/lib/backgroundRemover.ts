@@ -27,9 +27,6 @@ export async function loadModel() {
 
 /**
  * Removes the background from an image, keeping only the person
- * @param imageUrl - URL of the image to process
- * @param settings - Configuration for the background removal
- * @returns Promise<string> - The data URL of the processed image
  */
 export async function removeBackground(
   imageUrl: string,
@@ -37,31 +34,26 @@ export async function removeBackground(
     foregroundThreshold?: number;
     backgroundThreshold?: number;
     alphaMatting?: boolean;
+    blurEffect?: number;
   } = {}
 ): Promise<string> {
   try {
-    // Load the model if not already loaded
     const model = await loadModel();
-
-    // Create an image element
     const img = new Image();
     img.crossOrigin = 'anonymous';
 
-    // Wait for the image to load
     await new Promise<void>((resolve, reject) => {
       img.onload = () => resolve();
       img.onerror = reject;
       img.src = imageUrl;
     });
 
-    // Get the segmentation of the person
     const segmentation = await model.segmentPerson(img, {
       flipHorizontal: false,
-      internalResolution: 'medium',
-      segmentationThreshold: (settings.foregroundThreshold || 50) / 100,
+      internalResolution: 'high', // High resolution for better accuracy
+      segmentationThreshold: (settings.foregroundThreshold || 30) / 100, // Lower threshold
     });
 
-    // Create a canvas to draw the result
     const canvas = document.createElement('canvas');
     canvas.width = img.width;
     canvas.height = img.height;
@@ -71,34 +63,36 @@ export async function removeBackground(
       throw new Error('Could not get canvas context');
     }
 
-    // Draw the original image
     ctx.drawImage(img, 0, 0);
-
-    // Get the image data
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const pixels = imageData.data;
 
-    // Apply the mask to remove the background
     for (let i = 0; i < segmentation.data.length; i++) {
-      // If pixel is not part of person, make it transparent
+      const pixelIndex = i * 4;
+
       if (!segmentation.data[i]) {
-        // Each pixel has 4 values (RGBA), so multiply by 4
-        const pixelIndex = i * 4;
-        pixels[pixelIndex + 3] = 0; // Set alpha to 0 (transparent)
+        pixels[pixelIndex + 3] = 0;
+      } else if (settings.alphaMatting) {
+        pixels[pixelIndex + 3] = 255; // Fully opaque for detected person
       }
     }
 
-    // Put the modified image data back on the canvas
     ctx.putImageData(imageData, 0, 0);
 
-    // Return the data URL of the image with background removed
+    // Apply blur effect for smoother edges
+    if (settings.blurEffect && settings.blurEffect > 0) {
+      ctx.globalAlpha = 0.7;
+      ctx.filter = `blur(${settings.blurEffect}px)`;
+      ctx.drawImage(canvas, 0, 0);
+      ctx.filter = 'none';
+    }
+
     return canvas.toDataURL('image/png');
   } catch (error) {
     console.error('Error removing background:', error);
     throw error;
   }
 }
-
 /**
  * Downloads the processed image
  * @param dataUrl - The data URL of the image
