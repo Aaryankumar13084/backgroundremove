@@ -12,7 +12,7 @@ export async function loadModel() {
       bodyPixModel = await bodyPix.load({
         architecture: 'MobileNetV1',
         outputStride: 16,
-        multiplier: 0.75,
+        multiplier: 1.0, // बेहतर accuracy के लिए 1.0 किया
         quantBytes: 2
       });
       console.log('BodyPix model loaded successfully');
@@ -25,6 +25,29 @@ export async function loadModel() {
 }
 
 /**
+ * Refine mask using dilation to remove background more effectively
+ */
+function refineMask(mask: Uint8Array, width: number, height: number, iterations: number = 2): Uint8Array {
+  const newMask = new Uint8Array(mask);
+  
+  for (let iter = 0; iter < iterations; iter++) {
+    for (let y = 1; y < height - 1; y++) {
+      for (let x = 1; x < width - 1; x++) {
+        const i = y * width + x;
+        
+        if (mask[i] === 0 && (
+          mask[i - 1] === 1 || mask[i + 1] === 1 || 
+          mask[i - width] === 1 || mask[i + width] === 1
+        )) {
+          newMask[i] = 1; // Expand foreground
+        }
+      }
+    }
+  }
+  return newMask;
+}
+
+/**
  * Removes the background from an image, keeping only the person
  */
 export async function removeBackground(
@@ -32,7 +55,7 @@ export async function removeBackground(
   settings: {
     foregroundThreshold?: number;
     blurEffect?: number;
-    featherEffect?: number;
+    refineEdges?: boolean;
   } = {}
 ): Promise<string> {
   try {
@@ -46,11 +69,13 @@ export async function removeBackground(
       img.src = imageUrl;
     });
 
-    const segmentation = await model.segmentPersonParts(img, {
+    const segmentation = await model.segmentPerson(img, {
       flipHorizontal: false,
       internalResolution: 'high',
-      segmentationThreshold: (settings.foregroundThreshold || 5) / 100, // अब 5% पर सेट किया (और ज्यादा सटीक)
+      segmentationThreshold: (settings.foregroundThreshold || 10) / 100, // बेहतर accuracy के लिए 10% threshold
     });
+
+    const mask = settings.refineEdges ? refineMask(segmentation.data, img.width, img.height) : segmentation.data;
 
     const canvas = document.createElement('canvas');
     canvas.width = img.width;
@@ -65,27 +90,17 @@ export async function removeBackground(
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const pixels = imageData.data;
 
-    for (let i = 0; i < segmentation.data.length; i++) {
+    for (let i = 0; i < mask.length; i++) {
       const pixelIndex = i * 4;
 
-      if (!segmentation.data[i]) {
-        pixels[pixelIndex + 3] = 0;
-      } else {
-        pixels[pixelIndex + 3] = 255;
+      if (!mask[i]) {
+        pixels[pixelIndex + 3] = 0; // Background को transparent कर दिया
       }
     }
 
     ctx.putImageData(imageData, 0, 0);
 
-    // Apply feathering effect for smoother edges
-    if (settings.featherEffect && settings.featherEffect > 0) {
-      ctx.globalAlpha = 0.8;
-      ctx.filter = `blur(${settings.featherEffect}px)`;
-      ctx.drawImage(canvas, 0, 0);
-      ctx.filter = 'none';
-    }
-
-    // Apply blur effect for fine edges
+    // Apply blur effect for smoother edges
     if (settings.blurEffect && settings.blurEffect > 0) {
       ctx.globalAlpha = 0.9;
       ctx.filter = `blur(${settings.blurEffect}px)`;
