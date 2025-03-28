@@ -4,7 +4,6 @@ import * as tf from '@tensorflow/tfjs';
 // Initialize TensorFlow.js
 tf.setBackend('webgl');
 
-// Load the BodyPix model
 let bodyPixModel: bodyPix.BodyPix | null = null;
 
 export async function loadModel() {
@@ -50,8 +49,8 @@ export async function removeBackground(
 
     const segmentation = await model.segmentPerson(img, {
       flipHorizontal: false,
-      internalResolution: 'high', // High resolution for better accuracy
-      segmentationThreshold: (settings.foregroundThreshold || 30) / 100, // Lower threshold
+      internalResolution: 'high',
+      segmentationThreshold: (settings.foregroundThreshold || 15) / 100, // Lower threshold for better background removal
     });
 
     const canvas = document.createElement('canvas');
@@ -73,15 +72,15 @@ export async function removeBackground(
       if (!segmentation.data[i]) {
         pixels[pixelIndex + 3] = 0;
       } else if (settings.alphaMatting) {
-        pixels[pixelIndex + 3] = 255; // Fully opaque for detected person
+        pixels[pixelIndex + 3] = 255;
       }
     }
 
     ctx.putImageData(imageData, 0, 0);
 
-    // Apply blur effect for smoother edges
+    // Apply soft mask to improve edges
     if (settings.blurEffect && settings.blurEffect > 0) {
-      ctx.globalAlpha = 0.7;
+      ctx.globalAlpha = 0.8;
       ctx.filter = `blur(${settings.blurEffect}px)`;
       ctx.drawImage(canvas, 0, 0);
       ctx.filter = 'none';
