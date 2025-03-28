@@ -31,9 +31,8 @@ export async function removeBackground(
   imageUrl: string,
   settings: {
     foregroundThreshold?: number;
-    backgroundThreshold?: number;
-    alphaMatting?: boolean;
     blurEffect?: number;
+    featherEffect?: number;
   } = {}
 ): Promise<string> {
   try {
@@ -47,10 +46,10 @@ export async function removeBackground(
       img.src = imageUrl;
     });
 
-    const segmentation = await model.segmentPerson(img, {
+    const segmentation = await model.segmentPersonParts(img, {
       flipHorizontal: false,
       internalResolution: 'high',
-      segmentationThreshold: (settings.foregroundThreshold || 15) / 100, // Lower threshold for better background removal
+      segmentationThreshold: (settings.foregroundThreshold || 5) / 100, // अब 5% पर सेट किया (और ज्यादा सटीक)
     });
 
     const canvas = document.createElement('canvas');
@@ -71,16 +70,24 @@ export async function removeBackground(
 
       if (!segmentation.data[i]) {
         pixels[pixelIndex + 3] = 0;
-      } else if (settings.alphaMatting) {
+      } else {
         pixels[pixelIndex + 3] = 255;
       }
     }
 
     ctx.putImageData(imageData, 0, 0);
 
-    // Apply soft mask to improve edges
-    if (settings.blurEffect && settings.blurEffect > 0) {
+    // Apply feathering effect for smoother edges
+    if (settings.featherEffect && settings.featherEffect > 0) {
       ctx.globalAlpha = 0.8;
+      ctx.filter = `blur(${settings.featherEffect}px)`;
+      ctx.drawImage(canvas, 0, 0);
+      ctx.filter = 'none';
+    }
+
+    // Apply blur effect for fine edges
+    if (settings.blurEffect && settings.blurEffect > 0) {
+      ctx.globalAlpha = 0.9;
       ctx.filter = `blur(${settings.blurEffect}px)`;
       ctx.drawImage(canvas, 0, 0);
       ctx.filter = 'none';
