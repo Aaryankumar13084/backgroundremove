@@ -33,7 +33,7 @@ export default function SettingsSection({ settings, isLoading }: SettingsSection
   
   const defaultSettings: Settings = {
     model: 'u2net',
-    foregroundThreshold: 50,
+    foregroundThreshold: 86,
     backgroundThreshold: 30,
     alphaMatting: false,
     backgroundType: 'transparent',
